@@ -1,0 +1,37 @@
+{
+  "name": "homebridge-automation-presence",
+  "version": "0.0.1",
+  "description": "Manage presence in your home, based on data collected from your sensors",
+  "license": "ISC",
+  "keywords": [
+    "homebridge-plugin"
+  ],
+  "author": {
+    "name": "Paolo Tremadio"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/paolotremadio/homebridge-automation-presence.git"
+  },
+  "bugs": {
+    "url": "http://github.com/paolotremadio/homebridge-automation-presence/issues"
+  },
+  "main": "src/index.js",
+  "engines": {
+    "node": ">=8.0.0",
+    "homebridge": ">=0.4.0"
+  },
+  "dependencies": {
+    "hap-nodejs": "^0.4.28",
+    "lodash": "^4.17.10",
+    "winston": "^3.1.0"
+  },
+  "devDependencies": {
+    "eslint": "^4.16.0",
+    "eslint-config-airbnb-base": "^12.1.0",
+    "eslint-plugin-import": "^2.8.0"
+  },
+  "scripts": {
+    "lint": "./node_modules/eslint/bin/eslint.js . --ext .js"
+  }
+}

@@ -21,7 +21,7 @@ class AutomationPresence {
     this.name = config.name;
     this.zones = initState(config.zones, UUIDGen.generate);
 
-    this.logger = logger;
+    this.logger = logger(`${storagePath}/presence.log`);
 
     this.logger.debug('Service started');
 

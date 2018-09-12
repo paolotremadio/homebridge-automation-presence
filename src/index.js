@@ -1,4 +1,5 @@
 const { forEach, values } = require('lodash');
+const fakegatoHistory = require('fakegato-history');
 
 const logger = require('./logger');
 const logEvent = require('./logger/message/event');
@@ -11,6 +12,8 @@ const pkginfo = require('../package');
 let Characteristic;
 let Service;
 let UUIDGen;
+let FakeGatoHistoryService;
+let storagePath;
 
 class AutomationPresence {
   constructor(log, config) {
@@ -48,6 +51,7 @@ class AutomationPresence {
     forEach(this.zones, (zone) => {
       const { id: zoneId, name: zoneName } = zone;
 
+      // Main sensor
       const sensor = new Service.MotionSensor(
         zoneName,
         zoneId,
@@ -57,6 +61,7 @@ class AutomationPresence {
         .getCharacteristic(Characteristic.MotionDetected)
         .on('get', callback => callback(null, zone.triggered));
 
+      // Add triggers
       forEach(zone.triggers, (trigger) => {
         const { id: triggerId, name: triggerName } = trigger;
 
@@ -73,10 +78,11 @@ class AutomationPresence {
         this.zoneTriggers[triggerId] = active;
       });
 
+      // Add to the list
       this.zoneServices[zoneId] = sensor;
     });
 
-    return values(this.zoneServices);
+    return [...values(this.zoneServices), ...values(this.zoneHistoryServices)];
   }
 
   getMasterPresenceSensor() {
@@ -89,14 +95,25 @@ class AutomationPresence {
     this.masterPresenceSensor
       .on('get', callback => callback(null, this.masterPresenceSensorTriggered));
 
-    return this.masterPresenceSensor;
+    // Add history
+    this.masterPresenceSensorHistory = new FakeGatoHistoryService(
+      'motion',
+      this.masterPresenceSensor,
+      {
+        storage: 'fs',
+        path: `${storagePath}/accessories`,
+        filename: `history_presence_master_${UUIDGen.generate(this.name)}.json`,
+      },
+    );
+
+    return [this.masterPresenceSensor, this.masterPresenceSensorHistory];
   }
 
   createServices() {
     return [
       this.getAccessoryInformationService(),
       ...this.getZoneServices(),
-      this.getMasterPresenceSensor(),
+      ...this.getMasterPresenceSensor(),
     ];
   }
 
@@ -137,6 +154,11 @@ class AutomationPresence {
         .getCharacteristic(Characteristic.MotionDetected)
         .updateValue(value);
 
+      this.masterPresenceSensor.log = this.homebridgeLog;
+
+      this.masterPresenceSensorHistory
+        .addEntry({ time: new Date().getTime(), status: value });
+
       this.logger.info(logEvent(null, null, value, { master: true }));
     }
   }
@@ -163,6 +185,8 @@ module.exports = (homebridge) => {
   Service = homebridge.hap.Service; // eslint-disable-line
   Characteristic = homebridge.hap.Characteristic; // eslint-disable-line
   UUIDGen = homebridge.hap.uuid; // eslint-disable-line
+  storagePath = homebridge.user.storagePath(); // eslint-disable-line
 
+  FakeGatoHistoryService = fakegatoHistory(homebridge);
   homebridge.registerAccessory('homebridge-automation-presence', 'AutomationPresence', AutomationPresence);
 };

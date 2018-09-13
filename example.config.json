@@ -1,0 +1,121 @@
+{
+  "zones": [
+    {
+      "name": "Living Room",
+      "triggers": [
+        {
+          "name": "Couch vibration 1"
+        },
+        {
+          "name": "Couch vibration 2"
+        },
+        {
+          "name": "Bay window vibration 1"
+        },
+        {
+          "name": "Motion sensor 1"
+        },
+        {
+          "name": "Motion sensor 2"
+        },
+        {
+          "name": "Bay window switch 1"
+        },
+        {
+          "name": "Kitchen switch 1"
+        },
+        {
+          "name": "Living room dimmer 1"
+        },
+        {
+          "name": "Audio streaming"
+        },
+        {
+          "name": "TV playing"
+        }
+      ]
+    },
+    {
+      "name": "Bedroom",
+      "triggers": [
+        {
+          "name": "Motion sensor 1"
+        },
+        {
+          "name": "Motion sensor 2"
+        },
+        {
+          "name": "Bed vibration 1"
+        },
+        {
+          "name": "Bed vibration 2"
+        },
+        {
+          "name": "Bedroom dimmer 1"
+        },
+        {
+          "name": "Audio streaming"
+        }
+      ]
+    },
+    {
+      "name": "Bathroom",
+      "triggers": [
+        {
+          "name": "Motion sensor 1"
+        },
+        {
+          "name": "Audio streaming"
+        }
+      ]
+    },
+    {
+      "name": "Living Room Couch",
+      "triggers": [
+        {
+          "name": "Couch vibration 1"
+        },
+        {
+          "name": "Couch vibration 2"
+        }
+        ]
+    },
+    {
+      "name": "Bedroom Bed",
+      "triggers": [
+        {
+          "name": "Bed vibration 1"
+        },
+        {
+          "name": "Bed vibration 2"
+        }
+      ]
+    },
+    {
+      "name": "People - Cleaner",
+      "triggers": [
+        {
+          "name": "Key's tag"
+        }
+      ]
+    },
+    {
+      "name": "People - Guest 1",
+      "enabled": 0,
+      "triggers": [
+        {
+          "name": "Key's tag"
+        }
+      ]
+    },
+    {
+      "name": "People - Guest 2",
+      "enabled": 0,
+      "triggers": [
+        {
+          "name": "Key's tag"
+        }
+      ]
+    }
+  ]
+}

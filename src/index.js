@@ -4,7 +4,6 @@ const fakegatoHistory = require('fakegato-history');
 const logger = require('./logger');
 const logEvent = require('./logger/message/event');
 const initState = require('./state/init');
-const triggerCharacteristic = require('./homekit/trigger-characteristic');
 const isTriggeredReducer = require('./state/is-triggered-reducer');
 
 const pkginfo = require('../package');
@@ -65,24 +64,28 @@ class AutomationPresence {
       forEach(zone.triggers, (trigger) => {
         const { id: triggerId, name: triggerName } = trigger;
 
-        const active = triggerCharacteristic(triggerName, triggerId);
+        const triggerSwitch = new Service.Switch(`${zoneName} - ${triggerName}`, triggerId);
 
-        sensor
-          .addCharacteristic(active)
+        triggerSwitch
+          .getCharacteristic(Characteristic.On)
           .on('get', callback => callback(null, trigger.triggered))
           .on('set', (on, callback) => {
             this.handleTriggerEvent(zoneId, triggerId, on ? 1 : 0);
             callback();
           });
 
-        this.zoneTriggers[triggerId] = active;
+        this.zoneTriggers[triggerId] = triggerSwitch;
       });
 
       // Add to the list
       this.zoneServices[zoneId] = sensor;
     });
 
-    return [...values(this.zoneServices), ...values(this.zoneHistoryServices)];
+    return [
+      ...values(this.zoneServices),
+      ...values(this.zoneTriggers),
+      ...values(this.zoneHistoryServices),
+    ];
   }
 
   getMasterPresenceSensor() {

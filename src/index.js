@@ -60,6 +60,10 @@ class AutomationPresence {
         .getCharacteristic(Characteristic.MotionDetected)
         .on('get', callback => callback(null, zone.triggered));
 
+      sensor
+        .getCharacteristic(Characteristic.StatusActive)
+        .on('get', callback => callback(null, true));
+
       // Add triggers
       forEach(zone.triggers, (trigger) => {
         const { id: triggerId, name: triggerName } = trigger;

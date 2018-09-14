@@ -66,8 +66,7 @@ class AutomationPresence {
 
       // Add triggers
       forEach(zone.triggers, (trigger) => {
-        const { id: partialTriggerId, name: triggerName } = trigger;
-        const triggerId = `${zoneId}_${partialTriggerId}`;
+        const { id: triggerId, name: triggerName } = trigger;
 
         const triggerSwitch = new Service.Switch(`${zoneName} - ${triggerName}`, triggerId);
 

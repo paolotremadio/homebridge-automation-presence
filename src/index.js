@@ -4,6 +4,8 @@ const fakegatoHistory = require('fakegato-history');
 const logger = require('./logger');
 const logEvent = require('./logger/message/event');
 const initState = require('./state/init');
+const statePersist = require('./state/persist');
+const mergePersisted = require('./state/merge-persisted-state');
 const isTriggeredReducer = require('./state/is-triggered-reducer');
 
 const pkginfo = require('../package');
@@ -18,13 +20,41 @@ class AutomationPresence {
   constructor(log, config) {
     this.homebridgeLog = log;
     this.name = config.name;
-    this.zones = initState(config.zones, UUIDGen.generate);
 
-    this.logger = logger(`${storagePath}/presence.log`);
+    this.accessoryUUID = UUIDGen.generate(this.name);
+    this.stateStorageFile = `${storagePath}/accessories/presence_state_${this.accessoryUUID}.json`;
 
+    const persistedState = this.getPersistedState();
+    const initialState = initState(config.zones, UUIDGen.generate);
+    this.zones = mergePersisted(persistedState, initialState);
+
+    this.masterPresenceSensorTriggeredTimer = null;
+    this.masterPresenceOffDelay =
+      config.masterPresenceOffDelay ? config.masterPresenceOffDelay * 1000 : 5000;
+
+    this.logger = logger(`${storagePath}/presence.log`, config.debug);
     this.logger.debug('Service started');
 
     this.services = this.createServices();
+  }
+
+  getPersistedState() {
+    setTimeout(() => this.persistState(), 5000);
+
+    try {
+      return statePersist.getPersistedState(this.stateStorageFile);
+    } catch (e) {
+      this.homebridgeLog('No previous state persisted on file');
+      return {};
+    }
+  }
+
+  persistState() {
+    try {
+      statePersist.persistState(this.stateStorageFile, this.zones);
+    } catch (e) {
+      this.homebridgeLog(`Cannot persist state: ${e.message}`);
+    }
   }
 
   getAccessoryInformationService() {
@@ -93,7 +123,7 @@ class AutomationPresence {
   }
 
   getMasterPresenceSensor() {
-    this.masterPresenceSensorTriggered = 0;
+    this.masterPresenceSensorTriggered = isTriggeredReducer(this.zones);
     this.masterPresenceSensor = new Service.MotionSensor(
       `${this.name} (master)`,
       'master',
@@ -102,14 +132,20 @@ class AutomationPresence {
     this.masterPresenceSensor
       .on('get', callback => callback(null, this.masterPresenceSensorTriggered));
 
+    this.masterPresenceSensor
+      .getCharacteristic(Characteristic.MotionDetected)
+      .updateValue(this.masterPresenceSensorTriggered);
+
     // Add history
+    this.masterPresenceSensor.log = this.homebridgeLog;
+
     this.masterPresenceSensorHistory = new FakeGatoHistoryService(
       'motion',
       this.masterPresenceSensor,
       {
         storage: 'fs',
         path: `${storagePath}/accessories`,
-        filename: `history_presence_master_${UUIDGen.generate(this.name)}.json`,
+        filename: `history_presence_master_${this.accessoryUUID}.json`,
       },
     );
 
@@ -137,10 +173,12 @@ class AutomationPresence {
       };
 
       this.logger.info(logEvent(zoneId, triggerId, value, eventExtras));
+      this.persistState();
     }
   }
 
-  updateZone(zoneId, value) {
+  updateZone(zoneId) {
+    const value = isTriggeredReducer(this.zones[zoneId].triggers);
     const zone = zoneId && this.zones[zoneId];
 
     if (zone.triggered !== value) {
@@ -151,22 +189,47 @@ class AutomationPresence {
         .updateValue(value);
 
       this.logger.info(logEvent(zoneId, null, value, { zoneName: zone.name }));
+      this.persistState();
     }
   }
 
-  updateMaster(value) {
-    if (this.masterPresenceSensorTriggered !== value) {
-      this.masterPresenceSensorTriggered = value;
+  updateMaster() {
+    const value = isTriggeredReducer(this.zones);
+
+    const updateSensor = (status) => {
+      this.masterPresenceSensorTriggered = status;
       this.masterPresenceSensor
         .getCharacteristic(Characteristic.MotionDetected)
-        .updateValue(value);
+        .updateValue(status);
 
-      this.masterPresenceSensor.log = this.homebridgeLog;
+      this.masterPresenceSensorHistory
+        .addEntry({ time: new Date().getTime(), status });
 
+      this.logger.info(logEvent(null, null, status, { master: true }));
+    };
+
+    // Write log only if there's a change (to avoid writing a new line every single switch change)
+    if (value !== this.masterPresenceSensorTriggered) {
       this.masterPresenceSensorHistory
         .addEntry({ time: new Date().getTime(), status: value });
 
       this.logger.info(logEvent(null, null, value, { master: true }));
+    }
+
+    if (value) {
+      // Update immediately
+      updateSensor(value);
+
+      // Stop the timer (if any)
+      if (this.masterPresenceSensorTriggeredTimer) {
+        clearTimeout(this.masterPresenceSensorTriggeredTimer);
+      }
+    } else {
+      // Set a timer to apply the change
+      this.masterPresenceSensorTriggeredTimer = setTimeout(
+        () => updateSensor(value),
+        this.masterPresenceOffDelay,
+      );
     }
   }
 
@@ -175,12 +238,10 @@ class AutomationPresence {
     this.updateTrigger(zoneId, triggerId, value);
 
     // Update zone
-    const zoneTriggered = isTriggeredReducer(this.zones[zoneId].triggers);
-    this.updateZone(zoneId, zoneTriggered);
+    this.updateZone(zoneId);
 
     // Update master service
-    const masterTriggered = isTriggeredReducer(this.zones);
-    this.updateMaster(masterTriggered);
+    this.updateMaster();
   }
 
   getServices() {

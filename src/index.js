@@ -1,7 +1,7 @@
 const { forEach, values } = require('lodash');
 const fakegatoHistory = require('fakegato-history');
+const logger = require('homeautomation-winston-logger');
 
-const logger = require('./logger');
 const logEvent = require('./logger/message/event');
 const initState = require('./state/init');
 const statePersist = require('./state/persist');

@@ -1,8 +1,9 @@
-const { forEach, values } = require('lodash');
+const { forEach, values, cloneDeep } = require('lodash');
 const fakegatoHistory = require('fakegato-history');
 const logger = require('homeautomation-winston-logger');
 
 const logEvent = require('./logger/message/event');
+const logSnapshot = require('./logger/message/snapshot');
 const initState = require('./state/init');
 const statePersist = require('./state/persist');
 const mergePersisted = require('./state/merge-persisted-state');
@@ -36,6 +37,7 @@ class AutomationPresence {
     this.logger.debug('Service started');
 
     this.services = this.createServices();
+    this.startStateSnapshot();
   }
 
   getPersistedState() {
@@ -55,6 +57,17 @@ class AutomationPresence {
     } catch (e) {
       this.homebridgeLog(`Cannot persist state: ${e.message}`);
     }
+  }
+
+  startStateSnapshot() {
+    setTimeout(() => {
+      const snapshot = cloneDeep(this.zones);
+      snapshot['master'] = {
+        triggered: this.masterPresenceSensorTriggered,
+      };
+
+      this.logger.info(logSnapshot(snapshot));
+    }, 10*60*1000);
   }
 
   getAccessoryInformationService() {

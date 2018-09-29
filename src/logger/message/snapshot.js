@@ -3,6 +3,6 @@ module.exports =
     {
       type: 'snapshot',
       snapshot,
-      ...extra
+      ...extra,
     }
   );

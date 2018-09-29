@@ -60,14 +60,16 @@ class AutomationPresence {
   }
 
   startStateSnapshot() {
-    setTimeout(() => {
+    const generateSnapshot = () => {
       const snapshot = cloneDeep(this.zones);
-      snapshot['master'] = {
+      snapshot.master = {
         triggered: this.masterPresenceSensorTriggered,
       };
 
       this.logger.info(logSnapshot(snapshot));
-    }, 10*60*1000);
+    };
+    generateSnapshot();
+    setInterval(generateSnapshot, 10 * 60 * 1000);
   }
 
   getAccessoryInformationService() {

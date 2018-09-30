@@ -23,7 +23,7 @@
   },
   "dependencies": {
     "fakegato-history": "^0.5.2",
-    "homeautomation-winston-logger": "^0.0.1",
+    "homeautomation-winston-logger": "^0.0.2",
     "lodash": "^4.17.10"
   },
   "devDependencies": {

@@ -43,8 +43,10 @@ class AutomationPresence {
         config.api.host,
         config.api.port,
         {
-          getState: async () => ({ master: this.masterPresenceSensorTriggered, zones: this.zones}),
-          setState: async (zoneId, triggerId, triggered) => (this.handleTriggerEvent(zoneId, triggerId, triggered ? 1 : 0, true)),
+          getState: async () => ({ master: this.masterPresenceSensorTriggered, zones: this.zones }),
+          setState: async (zoneId, triggerId, triggered) => (
+            this.handleTriggerEvent(zoneId, triggerId, triggered ? 1 : 0, true)
+          ),
         },
       );
     }

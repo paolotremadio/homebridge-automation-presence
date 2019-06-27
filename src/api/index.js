@@ -13,8 +13,8 @@ module.exports = (host, port, hooks) => {
 
   app.get('/state', async (req, res) => {
     debug('GET /state');
-    const status = await hooks.getState();
-    res.json({ success: true, status});
+    const state = await hooks.getState();
+    res.json({ success: true, state });
   });
 
   app.post('/state', async (req, res) => {

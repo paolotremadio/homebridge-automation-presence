@@ -1,6 +1,7 @@
 const { forEach, values, cloneDeep } = require('lodash');
 const fakegatoHistory = require('fakegato-history');
 const logger = require('homeautomation-winston-logger');
+const moment = require('moment');
 
 const logEvent = require('./logger/message/event');
 const logSnapshot = require('./logger/message/snapshot');
@@ -8,6 +9,7 @@ const initState = require('./state/init');
 const statePersist = require('./state/persist');
 const mergePersisted = require('./state/merge-persisted-state');
 const isTriggeredReducer = require('./state/is-triggered-reducer');
+const Api = require('./api');
 
 const pkginfo = require('../package');
 
@@ -36,8 +38,21 @@ class AutomationPresence {
     this.logger = logger(`${storagePath}/presence.log`, config.debug);
     this.logger.debug('Service started');
 
+    if (config.api) {
+      Api(
+        config.api.host,
+        config.api.port,
+        {
+          getState: async () => ({ master: this.masterPresenceSensorTriggered, zones: this.zones}),
+          setState: async (zoneId, triggerId, triggered) => (this.handleTriggerEvent(zoneId, triggerId, triggered ? 1 : 0, true)),
+        },
+      );
+    }
+
     this.services = this.createServices();
     this.startStateSnapshot();
+
+    this.resetExpiredTriggers();
   }
 
   getPersistedState() {
@@ -175,12 +190,18 @@ class AutomationPresence {
     ];
   }
 
-  updateTrigger(zoneId, triggerId, value) {
+  updateTrigger(zoneId, triggerId, value, notifyHomekit) {
     const zone = zoneId && this.zones[zoneId];
     const trigger = zone && triggerId && this.zones[zoneId].triggers[triggerId];
 
     if (trigger.triggered !== value) {
       trigger.triggered = value;
+
+      if (value && trigger.resetAfter) {
+        trigger.resetAt = moment().add(trigger.resetAfter).format();
+      } else {
+        trigger.resetAt = undefined;
+      }
 
       const eventExtras = {
         zoneName: zone.name,
@@ -189,6 +210,12 @@ class AutomationPresence {
 
       this.logger.info(logEvent(zoneId, triggerId, value, eventExtras));
       this.persistState();
+
+      if (notifyHomekit) {
+        this.zoneTriggers[triggerId]
+          .getCharacteristic(Characteristic.On)
+          .updateValue(value);
+      }
     }
   }
 
@@ -248,15 +275,28 @@ class AutomationPresence {
     }
   }
 
-  handleTriggerEvent(zoneId, triggerId, value) {
+  handleTriggerEvent(zoneId, triggerId, value, notifyHomekit = false) {
     // Update trigger
-    this.updateTrigger(zoneId, triggerId, value);
+    this.updateTrigger(zoneId, triggerId, value, notifyHomekit);
 
     // Update zone
     this.updateZone(zoneId);
 
     // Update master service
     this.updateMaster();
+  }
+
+  resetExpiredTriggers() {
+    forEach(this.zones, ({ id: zoneId, name: zoneName, triggers }) => {
+      forEach(triggers, ({ id: triggerId, name: triggerName, resetAt }) => {
+        if (resetAt && moment().isAfter(resetAt)) {
+          this.homebridgeLog(`Zone "${zoneName}" - Trigger "${triggerName}" - Expired. Resetting...`);
+          this.handleTriggerEvent(zoneId, triggerId, 0, true);
+        }
+      });
+    });
+
+    setTimeout(() => this.resetExpiredTriggers(), 1000);
   }
 
   getServices() {

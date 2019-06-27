@@ -22,9 +22,13 @@
     "homebridge": ">=0.4.0"
   },
   "dependencies": {
+    "body-parser": "^1.19.0",
+    "debug": "^4.1.1",
+    "express": "^4.17.1",
     "fakegato-history": "^0.5.2",
     "homeautomation-winston-logger": "^0.0.2",
-    "lodash": "^4.17.10"
+    "lodash": "^4.17.10",
+    "moment": "^2.24.0"
   },
   "devDependencies": {
     "eslint": "^4.16.0",

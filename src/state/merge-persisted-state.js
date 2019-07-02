@@ -11,6 +11,9 @@ module.exports = (persistedState, newState) => {
       forOwn(zoneDetails.triggers, (triggerDetails, triggerId) => {
         // If the trigger was persisted before
         if (persistedState[zoneId].triggers[triggerId]) {
+          state[zoneId].triggers[triggerId].resetAt =
+            persistedState[zoneId].triggers[triggerId].resetAt;
+
           state[zoneId].triggers[triggerId].triggered =
             persistedState[zoneId].triggers[triggerId].triggered;
         }

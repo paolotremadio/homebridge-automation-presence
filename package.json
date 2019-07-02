@@ -1,6 +1,6 @@
 {
   "name": "homebridge-automation-presence",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Manage presence in your home, based on data collected from your sensors",
   "license": "ISC",
   "keywords": [

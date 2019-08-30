@@ -33,6 +33,7 @@ class AutomationPresence {
     this.zones = mergePersisted(persistedState, initialState);
 
     this.masterPresenceSensorTriggeredTimer = null;
+    this.masterPresenceSensorTriggered = null;
     this.masterPresenceOffDelay =
       config.masterPresenceOffDelay ? config.masterPresenceOffDelay * 1000 : 5000;
 
@@ -268,27 +269,22 @@ class AutomationPresence {
       this.logger.info(logEvent(null, null, status, { master: true }));
     };
 
-    // Write log only if there's a change (to avoid writing a new line every single switch change)
+    // Act only on state change
     if (value !== this.masterPresenceSensorTriggered) {
-      this.masterPresenceSensorHistory
-        .addEntry({ time: new Date().getTime(), status: value });
+      // Stop current timer (if any)
+      clearTimeout(this.masterPresenceSensorTriggeredTimer);
 
-      this.logger.info(logEvent(null, null, value, { master: true }));
-    }
-
-    // Stop current timer (if any)
-    clearTimeout(this.masterPresenceSensorTriggeredTimer);
-
-    // Evaluate what to do
-    if (value) {
-      // Update immediately
-      updateSensor(value, false);
-    } else {
-      // Set a timer to apply the change
-      this.masterPresenceSensorTriggeredTimer = setTimeout(
-        () => updateSensor(value, true),
-        this.masterPresenceOffDelay,
-      );
+      // Evaluate what to do
+      if (value) {
+        // Update immediately
+        updateSensor(value, false);
+      } else {
+        // Set a timer to apply the change
+        this.masterPresenceSensorTriggeredTimer = setTimeout(
+          () => updateSensor(value, true),
+          this.masterPresenceOffDelay,
+        );
+      }
     }
   }
 

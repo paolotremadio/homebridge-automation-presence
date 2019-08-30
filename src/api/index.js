@@ -11,17 +11,17 @@ module.exports = (host, port, hooks) => {
     extended: true,
   }));
 
-  app.get('/state', async (req, res) => {
+  app.get('/state', (req, res) => {
     debug('GET /state');
-    const state = await hooks.getState();
+    const state = hooks.getState();
     res.json({ success: true, state });
   });
 
-  app.post('/state', async (req, res) => {
+  app.post('/state', (req, res) => {
     const { zoneId, triggerId, triggered } = req.body;
     debug(`POST /state -- ${JSON.stringify({ zoneId, triggerId, triggered })}`);
 
-    await hooks.setState(zoneId, triggerId, triggered);
+    hooks.setState(zoneId, triggerId, triggered);
     res.json({ success: true });
   });
 

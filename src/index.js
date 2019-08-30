@@ -2,6 +2,7 @@ const { forEach, values, cloneDeep } = require('lodash');
 const fakegatoHistory = require('fakegato-history');
 const logger = require('homeautomation-winston-logger');
 const moment = require('moment');
+const debug = require('debug')('homebridge-automation-presence');
 
 const logEvent = require('./logger/message/event');
 const logSnapshot = require('./logger/message/snapshot');
@@ -43,17 +44,17 @@ class AutomationPresence {
         config.api.host,
         config.api.port,
         {
-          getState: async () => ({ master: this.masterPresenceSensorTriggered, zones: this.zones }),
-          setState: async (zoneId, triggerId, triggered) => (
-            this.handleTriggerEvent(zoneId, triggerId, triggered ? 1 : 0, true)
-          ),
+          getState: () => ({ master: this.masterPresenceSensorTriggered, zones: this.zones }),
+          setState: (zoneId, triggerId, triggered) => {
+            debug(`API setState() - Zone ID: ${zoneId} - Trigger ID: ${triggerId} - Triggered: ${triggered}`);
+            return this.handleTriggerEvent(zoneId, triggerId, triggered ? 1 : 0, true);
+          },
         },
       );
     }
 
     this.services = this.createServices();
     this.startStateSnapshot();
-
     this.resetExpiredTriggers();
   }
 
@@ -136,6 +137,7 @@ class AutomationPresence {
           .getCharacteristic(Characteristic.On)
           .on('get', callback => callback(null, trigger.triggered))
           .on('set', (on, callback) => {
+            debug(`Homekit switch set - Zone ID: ${zoneId} - Trigger ID: ${triggerId} - Triggered: ${on}`);
             this.handleTriggerEvent(zoneId, triggerId, on ? 1 : 0);
             callback();
           });
@@ -196,11 +198,15 @@ class AutomationPresence {
     const zone = zoneId && this.zones[zoneId];
     const trigger = zone && triggerId && this.zones[zoneId].triggers[triggerId];
 
+    debug(`updateTrigger() - Zone ID: ${zoneId} - Trigger ID: ${triggerId} - Value: ${value}`);
+
     if (trigger.triggered !== value) {
+      debug(`updateTrigger() - Zone ID: ${zoneId} - Trigger ID: ${triggerId} - Old status: ${trigger.triggered} - New status: ${value} - Value is different, updating`);
       trigger.triggered = value;
 
       if (value && trigger.resetAfter) {
         trigger.resetAt = moment().add(trigger.resetAfter).format();
+        debug(`updateTrigger() - Zone ID: ${zoneId} - Trigger ID: ${triggerId} - Reset after: ${trigger.resetAfter} - Will reset at: ${trigger.resetAt}`);
       } else {
         trigger.resetAt = undefined;
       }
@@ -225,7 +231,10 @@ class AutomationPresence {
     const value = isTriggeredReducer(this.zones[zoneId].triggers);
     const zone = zoneId && this.zones[zoneId];
 
+    debug(`updateZone() - Zone ID: ${zoneId} - Reduced value: ${value}`);
+
     if (zone.triggered !== value) {
+      debug(`updateZone() - Zone ID: ${zoneId} - Old status: ${zone.triggered} - New status: ${value} - Value is different, updating`);
       zone.triggered = value;
 
       this.zoneServices[zoneId]
@@ -238,9 +247,16 @@ class AutomationPresence {
   }
 
   updateMaster() {
+    debug('updateMaster()');
     const value = isTriggeredReducer(this.zones);
 
-    const updateSensor = (status) => {
+    const updateSensor = (status, fromTimer) => {
+      if (fromTimer) {
+        debug(`updateMaster() - Timer ran out - Old status: ${this.masterPresenceSensorTriggered} - New status: ${status}`);
+      } else {
+        debug(`updateMaster() - Instant update - Old status: ${this.masterPresenceSensorTriggered} - New status: ${status}`);
+      }
+
       this.masterPresenceSensorTriggered = status;
       this.masterPresenceSensor
         .getCharacteristic(Characteristic.MotionDetected)
@@ -260,18 +276,17 @@ class AutomationPresence {
       this.logger.info(logEvent(null, null, value, { master: true }));
     }
 
+    // Stop current timer (if any)
+    clearTimeout(this.masterPresenceSensorTriggeredTimer);
+
+    // Evaluate what to do
     if (value) {
       // Update immediately
-      updateSensor(value);
-
-      // Stop the timer (if any)
-      if (this.masterPresenceSensorTriggeredTimer) {
-        clearTimeout(this.masterPresenceSensorTriggeredTimer);
-      }
+      updateSensor(value, false);
     } else {
       // Set a timer to apply the change
       this.masterPresenceSensorTriggeredTimer = setTimeout(
-        () => updateSensor(value),
+        () => updateSensor(value, true),
         this.masterPresenceOffDelay,
       );
     }
@@ -293,6 +308,7 @@ class AutomationPresence {
       forEach(triggers, ({ id: triggerId, name: triggerName, resetAt }) => {
         if (resetAt && moment().isAfter(resetAt)) {
           this.homebridgeLog(`Zone "${zoneName}" - Trigger "${triggerName}" - Expired. Resetting...`);
+          debug(`resetExpiredTriggers() - Zone ID: ${zoneId} - Trigger ID: ${triggerId} - Expired; resetting...`);
           this.handleTriggerEvent(zoneId, triggerId, 0, true);
         }
       });

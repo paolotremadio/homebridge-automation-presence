@@ -31,11 +31,21 @@ class AutomationPresence {
     const persistedState = this.getPersistedState();
     const initialState = initState(config.zones, UUIDGen.generate);
     this.zones = mergePersisted(persistedState, initialState);
+    this.persistState();
 
-    this.masterPresenceSensorTriggeredTimer = null;
-    this.masterPresenceSensorTriggered = null;
-    this.masterPresenceOffDelay =
-      config.masterPresenceOffDelay ? config.masterPresenceOffDelay * 1000 : 5000;
+
+    const isMasterTriggered = isTriggeredReducer(this.zones);
+    const masterResetAfter = {
+      seconds: config.masterPresenceOffDelay || 5,
+    };
+
+    this.masterZone = {
+      id: 'master',
+      name: 'Master',
+      triggered: isMasterTriggered,
+      resetAfter: masterResetAfter,
+    };
+
 
     this.logger = logger(`${storagePath}/presence.log`, config.debug);
     this.logger.debug('Service started');
@@ -45,7 +55,7 @@ class AutomationPresence {
         config.api.host,
         config.api.port,
         {
-          getState: () => ({ master: this.masterPresenceSensorTriggered, zones: this.zones }),
+          getState: () => ({ master: this.masterZone, zones: this.zones }),
           setState: (zoneId, triggerId, triggered) => {
             debug(`API setState() - Zone ID: ${zoneId} - Trigger ID: ${triggerId} - Triggered: ${triggered}`);
             return this.handleTriggerEvent(zoneId, triggerId, triggered ? 1 : 0, true);
@@ -60,8 +70,6 @@ class AutomationPresence {
   }
 
   getPersistedState() {
-    setTimeout(() => this.persistState(), 5000);
-
     try {
       return statePersist.getPersistedState(this.stateStorageFile);
     } catch (e) {
@@ -80,12 +88,10 @@ class AutomationPresence {
 
   startStateSnapshot() {
     const generateSnapshot = () => {
-      const snapshot = cloneDeep(this.zones);
-      snapshot.master = {
-        triggered: this.masterPresenceSensorTriggered,
-      };
-
-      this.logger.info(logSnapshot(snapshot));
+      this.logger.info(logSnapshot({
+        ...cloneDeep(this.zones),
+        master: cloneDeep(this.masterZone),
+      }));
     };
     generateSnapshot();
     setInterval(generateSnapshot, 10 * 60 * 1000);
@@ -153,23 +159,23 @@ class AutomationPresence {
     return [
       ...values(this.zoneServices),
       ...values(this.zoneTriggers),
-      ...values(this.zoneHistoryServices),
     ];
   }
 
   getMasterPresenceSensor() {
-    this.masterPresenceSensorTriggered = isTriggeredReducer(this.zones);
     this.masterPresenceSensor = new Service.MotionSensor(
       `${this.name} (master)`,
       'master',
     );
 
+    const masterTriggered = this.masterZone.triggered;
+
     this.masterPresenceSensor
-      .on('get', callback => callback(null, this.masterPresenceSensorTriggered));
+      .on('get', callback => callback(null, masterTriggered));
 
     this.masterPresenceSensor
       .getCharacteristic(Characteristic.MotionDetected)
-      .updateValue(this.masterPresenceSensorTriggered);
+      .updateValue(masterTriggered);
 
     // Add history
     this.masterPresenceSensor.log = this.homebridgeLog;
@@ -207,7 +213,7 @@ class AutomationPresence {
 
       if (value && trigger.resetAfter) {
         trigger.resetAt = moment().add(trigger.resetAfter).format();
-        debug(`updateTrigger() - Zone ID: ${zoneId} - Trigger ID: ${triggerId} - Reset after: ${trigger.resetAfter} - Will reset at: ${trigger.resetAt}`);
+        debug(`updateTrigger() - Zone ID: ${zoneId} - Trigger ID: ${triggerId} - Reset after: ${JSON.stringify(trigger.resetAfter)} - Will reset at: ${trigger.resetAt}`);
       } else {
         trigger.resetAt = undefined;
       }
@@ -247,45 +253,48 @@ class AutomationPresence {
     }
   }
 
+  updateMasterSensor(status, fromTimer) {
+    if (fromTimer) {
+      debug(`updateMasterSensor() - Timer ran out - Old status: ${this.masterZone.triggered} - New status: ${status}`);
+    } else {
+      debug(`updateMasterSensor() - Instant update - Old status: ${this.masterZone.triggered} - New status: ${status}`);
+    }
+
+    this.masterZone.triggered = status;
+    this.masterPresenceSensor
+      .getCharacteristic(Characteristic.MotionDetected)
+      .updateValue(status);
+
+    this.masterPresenceSensorHistory
+      .addEntry({ time: new Date().getTime(), status });
+
+    this.logger.info(logEvent(null, null, status, { master: true }));
+  }
+
   updateMaster() {
-    debug('updateMaster()');
-    const value = isTriggeredReducer(this.zones);
+    const isMasterTriggered = isTriggeredReducer(this.zones);
+    debug(`updateMaster() - Old status: ${this.masterZone.triggered} - New status: ${isMasterTriggered}`);
 
-    const updateSensor = (status, fromTimer) => {
-      if (fromTimer) {
-        debug(`updateMaster() - Timer ran out - Old status: ${this.masterPresenceSensorTriggered} - New status: ${status}`);
-      } else {
-        debug(`updateMaster() - Instant update - Old status: ${this.masterPresenceSensorTriggered} - New status: ${status}`);
-      }
+    if (isMasterTriggered) {
+      debug('updateMaster() - Is Triggered - Unset resetAt');
+      this.masterZone.resetAt = undefined;
+    }
 
-      this.masterPresenceSensorTriggered = status;
-      this.masterPresenceSensor
-        .getCharacteristic(Characteristic.MotionDetected)
-        .updateValue(status);
-
-      this.masterPresenceSensorHistory
-        .addEntry({ time: new Date().getTime(), status });
-
-      this.logger.info(logEvent(null, null, status, { master: true }));
-    };
-
-    // Act only on state change
-    if (value !== this.masterPresenceSensorTriggered) {
-      // Stop current timer (if any)
-      clearTimeout(this.masterPresenceSensorTriggeredTimer);
-
+    // Update only if something as change (to avoid polluting the logs)
+    if (isMasterTriggered !== this.masterZone.triggered) {
       // Evaluate what to do
-      if (value) {
+      if (isMasterTriggered) {
         // Update immediately
-        updateSensor(value, false);
+        debug('updateMaster() - Status differ - Update immediately');
+        this.updateMasterSensor(isMasterTriggered, false);
       } else {
-        // Set a timer to apply the change
-        this.masterPresenceSensorTriggeredTimer = setTimeout(
-          () => updateSensor(value, true),
-          this.masterPresenceOffDelay,
-        );
+        // Schedule to reset
+        debug('updateMaster() - Status differ - Schedule for reset');
+        this.masterZone.resetAt = moment().add(this.masterZone.resetAfter).format();
       }
     }
+
+    this.persistState();
   }
 
   handleTriggerEvent(zoneId, triggerId, value, notifyHomekit = false) {
@@ -309,6 +318,12 @@ class AutomationPresence {
         }
       });
     });
+
+    if (this.masterZone.resetAt && moment().isAfter(this.masterZone.resetAt)) {
+      debug('resetExpiredTriggers() - Master - Expired; resetting...');
+      this.masterZone.resetAt = undefined;
+      this.updateMasterSensor(0, true);
+    }
 
     setTimeout(() => this.resetExpiredTriggers(), 1000);
   }

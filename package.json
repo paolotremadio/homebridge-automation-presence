@@ -28,7 +28,8 @@
     "fakegato-history": "^0.5.2",
     "homeautomation-winston-logger": "^0.0.2",
     "lodash": "^4.17.10",
-    "moment": "^2.24.0"
+    "moment": "^2.24.0",
+    "snyk": "^1.189.0"
   },
   "devDependencies": {
     "eslint": "^4.16.0",
@@ -36,6 +37,9 @@
     "eslint-plugin-import": "^2.8.0"
   },
   "scripts": {
-    "lint": "./node_modules/eslint/bin/eslint.js . --ext .js"
-  }
+    "lint": "./node_modules/eslint/bin/eslint.js . --ext .js",
+    "snyk-protect": "snyk protect",
+    "prepublish": "npm run snyk-protect"
+  },
+  "snyk": true
 }

@@ -16,11 +16,15 @@ module.exports = (persistedState, newState) => {
 
           state[zoneId].triggers[triggerId].triggered =
             persistedState[zoneId].triggers[triggerId].triggered;
+
+          state[zoneId].triggers[triggerId].lastUpdate =
+            persistedState[zoneId].triggers[triggerId].lastUpdate;
         }
       });
     }
 
     state[zoneId].triggered = isTriggeredReducer(state[zoneId].triggers);
+    state[zoneId].lastUpdate = persistedState[zoneId].lastUpdate;
   });
 
   return state;

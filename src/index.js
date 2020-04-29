@@ -44,6 +44,7 @@ class AutomationPresence {
       name: 'Master',
       triggered: isMasterTriggered,
       resetAfter: masterResetAfter,
+      lastUpdate: moment().format(),
     };
 
 
@@ -207,30 +208,28 @@ class AutomationPresence {
 
     debug(`updateTrigger() - Zone ID: ${zoneId} - Trigger ID: ${triggerId} - Value: ${value}`);
 
-    if (trigger.triggered !== value) {
-      debug(`updateTrigger() - Zone ID: ${zoneId} - Trigger ID: ${triggerId} - Old status: ${trigger.triggered} - New status: ${value} - Value is different, updating`);
-      trigger.triggered = value;
+    trigger.triggered = value;
+    trigger.lastUpdate = moment().format();
 
-      if (value && trigger.resetAfter) {
-        trigger.resetAt = moment().add(trigger.resetAfter).format();
-        debug(`updateTrigger() - Zone ID: ${zoneId} - Trigger ID: ${triggerId} - Reset after: ${JSON.stringify(trigger.resetAfter)} - Will reset at: ${trigger.resetAt}`);
-      } else {
-        trigger.resetAt = undefined;
-      }
+    if (value && trigger.resetAfter) {
+      trigger.resetAt = moment().add(trigger.resetAfter).format();
+      debug(`updateTrigger() - Zone ID: ${zoneId} - Trigger ID: ${triggerId} - Reset after: ${JSON.stringify(trigger.resetAfter)} - Will reset at: ${trigger.resetAt}`);
+    } else {
+      trigger.resetAt = undefined;
+    }
 
-      const eventExtras = {
-        zoneName: zone.name,
-        triggerName: trigger.name,
-      };
+    const eventExtras = {
+      zoneName: zone.name,
+      triggerName: trigger.name,
+    };
 
-      this.logger.info(logEvent(zoneId, triggerId, value, eventExtras));
-      this.persistState();
+    this.logger.info(logEvent(zoneId, triggerId, value, eventExtras));
+    this.persistState();
 
-      if (notifyHomekit) {
-        this.zoneTriggers[triggerId]
-          .getCharacteristic(Characteristic.On)
-          .updateValue(value);
-      }
+    if (notifyHomekit) {
+      this.zoneTriggers[triggerId]
+        .getCharacteristic(Characteristic.On)
+        .updateValue(value);
     }
   }
 
@@ -240,17 +239,15 @@ class AutomationPresence {
 
     debug(`updateZone() - Zone ID: ${zoneId} - Reduced value: ${value}`);
 
-    if (zone.triggered !== value) {
-      debug(`updateZone() - Zone ID: ${zoneId} - Old status: ${zone.triggered} - New status: ${value} - Value is different, updating`);
-      zone.triggered = value;
+    zone.triggered = value;
+    zone.lastUpdate = moment().format();
 
-      this.zoneServices[zoneId]
-        .getCharacteristic(Characteristic.MotionDetected)
-        .updateValue(value);
+    this.zoneServices[zoneId]
+      .getCharacteristic(Characteristic.MotionDetected)
+      .updateValue(value);
 
-      this.logger.info(logEvent(zoneId, null, value, { zoneName: zone.name }));
-      this.persistState();
-    }
+    this.logger.info(logEvent(zoneId, null, value, { zoneName: zone.name }));
+    this.persistState();
   }
 
   updateMasterSensor(status, fromTimer) {
@@ -261,6 +258,7 @@ class AutomationPresence {
     }
 
     this.masterZone.triggered = status;
+
     this.masterPresenceSensor
       .getCharacteristic(Characteristic.MotionDetected)
       .updateValue(status);
@@ -279,6 +277,8 @@ class AutomationPresence {
       debug('updateMaster() - Is Triggered - Unset resetAt');
       this.masterZone.resetAt = undefined;
     }
+
+    this.masterZone.lastUpdate = moment().format();
 
     // Update only if something as change (to avoid polluting the logs)
     if (isMasterTriggered !== this.masterZone.triggered) {

@@ -24,7 +24,7 @@ module.exports = (persistedState, newState) => {
     }
 
     state[zoneId].triggered = isTriggeredReducer(state[zoneId].triggers);
-    state[zoneId].lastUpdate = persistedState[zoneId].lastUpdate;
+    state[zoneId].lastUpdate = persistedState[zoneId] ? persistedState[zoneId].lastUpdate : null;
   });
 
   return state;
